@@ -1,7 +1,9 @@
 // Pobiera rejestry cen paliw i zapisuje paczki do <out>/fuel/<KRAJ>.json.
 // Gdy pobranie się nie uda (blokada adresu, awaria, zmiana formatu), bierze wczorajszą paczkę z opublikowanej strony,
 // żeby aplikacja nie została bez danych. Użycie: node scripts/build-fuel.mjs --out site [--fallback-url https://...]
+import { execFile } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { parseItaly, parseSpain, toPack, aggregate } from './lib/fuel.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []));
@@ -14,9 +16,17 @@ const UA = 'spendograph-data/1.0 (https://github.com/luxproapplications/spendogr
 const MIN_PRICES = 50; // mniej niż tyle marek-paliw to najpewniej zepsuty rejestr, a nie prawdziwy wynik
 
 async function get(url, accept) {
-  const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: accept ?? '*/*' }, signal: AbortSignal.timeout(120_000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res;
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: accept ?? '*/*' }, signal: AbortSignal.timeout(120_000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return res;
+  } catch (error) {
+    if (String(error.message).startsWith('HTTP ')) throw error;
+    // fetch z Node potrafi nie połączyć się z serwerem, który odpowiada na curl: próbujemy curl i zapisujemy przyczynę w dzienniku
+    console.error(`fetch failed for ${url}: ${error.cause?.code ?? error.cause?.message ?? error.message}; trying curl`);
+    const { stdout } = await promisify(execFile)('curl', ['-sSL', '--fail', '--retry', '3', '--max-time', '120', '-A', UA, url], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
+    return { text: async () => stdout.toString('utf8') };
+  }
 }
 
 const countries = {
