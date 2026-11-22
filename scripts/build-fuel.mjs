@@ -24,7 +24,7 @@ async function get(url, accept) {
     if (String(error.message).startsWith('HTTP ')) throw error;
     // fetch z Node potrafi nie połączyć się z serwerem, który odpowiada na curl: próbujemy curl i zapisujemy przyczynę w dzienniku
     console.error(`fetch failed for ${url}: ${error.cause?.code ?? error.cause?.message ?? error.message}; trying curl`);
-    const { stdout } = await promisify(execFile)('curl', ['-sSL', '--fail', '--retry', '3', '--max-time', '120', '-A', UA, url], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
+    const { stdout } = await promisify(execFile)('curl', ['-sSL', '--fail', '--retry', '1', '--connect-timeout', '20', '--max-time', '90', '-A', UA, url], { encoding: 'buffer', maxBuffer: 256 * 1024 * 1024 });
     return { text: async () => stdout.toString('utf8') };
   }
 }
@@ -65,6 +65,18 @@ for (const [code, load] of Object.entries(countries)) {
         console.error(`${code}: kept the previously published pack`);
       } catch (fallbackError) {
         console.error(`${code}: no previous pack either (${fallbackError.message})`);
+      }
+    }
+    // ostatnia deska ratunku: paczka zbudowana lokalnie i zapisana w repozytorium (np. gdy serwer rejestru blokuje adresy GitHuba)
+    const have = await readFile(target).then(() => true, () => false);
+    if (args['seed-dir'] && !have) {
+      try {
+        const seed = await readFile(`${args['seed-dir']}/fuel/${code}.json`, 'utf8');
+        JSON.parse(seed);
+        await writeFile(target, seed);
+        console.error(`${code}: used the seed pack from the repository (generated ${JSON.parse(seed).generated})`);
+      } catch (seedError) {
+        console.error(`${code}: no seed pack (${seedError.message})`);
       }
     }
   }
