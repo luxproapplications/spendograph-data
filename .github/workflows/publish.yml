@@ -32,7 +32,9 @@ jobs:
       - name: Build fuel packs
         run: |
           mkdir -p site
-          node scripts/build-fuel.mjs --out site --fallback-url "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          set -o pipefail
+          # dziennik budowy trafia też na stronę (build.log), bo logi Actions są widoczne tylko po zalogowaniu
+          node scripts/build-fuel.mjs --out site --fallback-url "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}" 2>&1 | tee site/build.log
       - name: Assemble site
         run: |
           cp -r tiles site/tiles
