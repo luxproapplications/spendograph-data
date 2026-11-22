@@ -1,0 +1,52 @@
+name: Publish site
+
+# Codziennie buduje paczki cen paliw i składa stronę razem z kafelkami sklepów, potem wdraża na GitHub Pages.
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - name: Build fuel packs
+        run: |
+          mkdir -p site
+          node scripts/build-fuel.mjs --out site --fallback-url "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+      - name: Assemble site
+        run: |
+          cp -r tiles site/tiles
+          cp README.md site/README.md
+          cat > site/index.html <<'EOF'
+          <!doctype html><meta charset="utf-8"><title>Spendograph data</title>
+          <h1>Spendograph data</h1>
+          <p>Open data packs for the Spendograph app: daily fuel price medians (ES, IT) and monthly store and station tiles.</p>
+          <p>Map data © OpenStreetMap contributors, ODbL. Fuel prices: Ministerio para la Transición Ecológica (ES), MIMIT Osservaprezzi Carburanti (IT).</p>
+          <p><a href="README.md">Details</a></p>
+          EOF
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
