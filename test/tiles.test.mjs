@@ -4,7 +4,7 @@ import { bounds, buildTiles, column, parseOverpass, row } from '../scripts/lib/t
 
 const sample = {
   elements: [
-    { type: 'node', lat: 52.2297, lon: 21.0122, tags: { shop: 'supermarket', brand: 'Biedronka', name: 'Biedronka 12' } },
+    { type: 'node', lat: 52.2297, lon: 21.0122, tags: { shop: 'supermarket', brand: 'Biedronka', name: 'Biedronka 12', 'addr:street': 'Długa', 'addr:housenumber': '12', 'addr:city': 'Warszawa' } },
     { type: 'way', center: { lat: 52.231, lon: 21.02 }, tags: { shop: 'convenience', name: 'Żabka' } },
     { type: 'node', lat: 52.5, lon: 21.5, tags: { amenity: 'fuel', brand: 'Orlen' } },
     { type: 'node', lat: 52.2, lon: 21.0, tags: { shop: 'supermarket' } },
@@ -31,7 +31,8 @@ test('buildTiles groups nearby places and records country', () => {
   const warsaw = tiles.get(`${column(21.0122)}_${row(52.2297)}`);
   assert.equal(warsaw.c, 'PL');
   assert.equal(warsaw.s.length, 2);
-  assert.deepEqual(warsaw.s[0], ['Biedronka', 0, 52.2297, 21.0122]);
+  assert.deepEqual(warsaw.s[0], ['Biedronka', 0, 52.2297, 21.0122, 'Długa 12, Warszawa']);
+  assert.equal(warsaw.s[1].length, 4, 'no address, no fifth element');
 });
 
 test('bounds cover all places', () => {

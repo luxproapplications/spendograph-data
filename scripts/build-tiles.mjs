@@ -1,7 +1,10 @@
 // Buduje kafelki sklepów i stacji dla krajów. Użycie: node scripts/build-tiles.mjs --countries PL,DE --out tiles [--input plik.json]
 // Pliki: <out>/<KRAJ>/<kolumna>_<wiersz>.json oraz <out>/index.json. Jeden kraj naraz, z przerwą między zapytaniami do Overpass.
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { bounds, buildTiles, countryQuery, parseOverpass, TILE } from './lib/tiles.mjs';
+import { bounds, buildTiles, chunks, countryQuery, parseOverpass, TILE } from './lib/tiles.mjs';
+
+// przybliżone prostokąty krajów, dzielone na kawałki; kraj bez wpisu jest pobierany jednym zapytaniem
+const COUNTRY_BOX = { PL: [49.0, 14.1, 54.9, 24.2] };
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) => (a.startsWith('--') ? [...acc, [a.slice(2), all[i + 1]]] : acc), []));
 const out = args.out ?? 'tiles';
@@ -38,8 +41,19 @@ let index = { version: 1, tile: TILE, countries: {} };
 try { index = JSON.parse(await readFile(`${out}/index.json`, 'utf8')); } catch { /* pierwsze uruchomienie */ }
 
 for (const code of countries) {
-  const json = args.input ? JSON.parse(await readFile(args.input, 'utf8')) : await overpass(countryQuery(code));
-  const stores = parseOverpass(json);
+  let stores;
+  if (args.input) {
+    stores = parseOverpass(JSON.parse(await readFile(args.input, 'utf8')));
+  } else if (COUNTRY_BOX[code]) {
+    const seen = new Map();
+    for (const box of chunks(COUNTRY_BOX[code])) {
+      for (const s of parseOverpass(await overpass(countryQuery(code, box)))) seen.set(s.id, s);
+      await new Promise((r) => setTimeout(r, 5_000));
+    }
+    stores = [...seen.values()];
+  } else {
+    stores = parseOverpass(await overpass(countryQuery(code)));
+  }
   if (stores.length < MIN_STORES && !args.input) throw new Error(`${code}: only ${stores.length} places, refusing to replace tiles`);
   const tiles = buildTiles(stores, code);
   await rm(`${out}/${code}`, { recursive: true, force: true });
