@@ -39,6 +39,7 @@ jobs:
         run: |
           cp -r tiles site/tiles
           cp README.md site/README.md
+          cp privacy.html site/privacy.html
           cat > site/index.html <<'EOF'
           <!doctype html><meta charset="utf-8"><title>Spendograph data</title>
           <h1>Spendograph data</h1>
